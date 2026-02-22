@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8" />
+	<title>PADE Plugin Architecture</title>
+</head>
+<body>
+	<h1>Personal Auto Distribution Engine - Architecture</h1>
+
+	<h2>Folder Structure</h2>
+	<pre>personal-auto-engine/
+    personal-auto-engine.php
+    includes/
+        class-settings.php
+        class-queue.php
+        class-scheduler.php
+        class-router.php
+        class-ai-engine.php
+        class-logger.php
+        class-database.php
+    platforms/
+        class-telegram.php
+        class-pinterest.php
+        class-facebook.php
+        class-twitter.php
+        class-linkedin.php
+    admin/
+        page-settings.php
+        page-control-center.php
+        page-queue.php
+    docs/
+        plugin-architecture.html</pre>
+
+	<h2>Database Schema</h2>
+	<ul>
+		<li><strong>wp_pade_queue</strong>: post queue records with payload, status lifecycle, retries, timestamps.</li>
+		<li><strong>wp_pade_logs</strong>: diagnostic log entries containing platform, HTTP code, full raw response JSON, and success flag.</li>
+		<li><strong>wp_pade_images</strong>: tracks image usage (`last_used_at`) for bulk image mode duplicate prevention.</li>
+	</ul>
+
+	<h2>Queue Lifecycle</h2>
+	<p>pending → approved → scheduled → processing → completed / failed</p>
+	<p>Retry policy: up to 3 total attempts (initial + 2 retries).</p>
+
+	<h2>Data Flow</h2>
+	<pre>WordPress Publish Event
+    -> Queue Engine inserts wp_pade_queue row
+    -> Scheduler cron triggers processing
+    -> Queue item enters processing
+    -> AI Engine generates caption (template placeholders)
+    -> Router dispatches payload to selected platform module
+    -> Platform module returns response and Logger::log() writes wp_pade_logs
+    -> Queue status updated to completed or failed/scheduled(retry)</pre>
+
+	<h2>How to Add a New Platform Class</h2>
+	<ol>
+		<li>Create `platforms/class-yourplatform.php` with `PADE_Platform_Yourplatform::send( $payload )`.</li>
+		<li>Inside `send()`, perform API request and call `PADE_Logger::log()` with full response data.</li>
+		<li>Update `PADE_Router::dispatch()` map with your new platform key and class name.</li>
+		<li>Add settings fields in the settings page for token and prompt template.</li>
+	</ol>
+
+	<h2>AI Integration</h2>
+	<ul>
+		<li>Centralized in `PADE_AI_Engine`.</li>
+		<li>Uses admin-configured OpenAI API key, model, and max tokens.</li>
+		<li>Uses platform prompt templates with placeholders:
+			<ul>
+				<li>{post_title}</li>
+				<li>{post_content}</li>
+				<li>{platform_name}</li>
+			</ul>
+		</li>
+		<li>Stores last AI response for diagnostics preview.</li>
+	</ul>
+</body>
+</html>
